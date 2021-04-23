@@ -123,9 +123,6 @@ public:
         return res;
     }
 
-    // our task: to maintain a structure for insert / remove (t, s)
-    // so for insert / remove, we can update weight by O(m)
-
     void addSpinWeight(bool spin, double tau) {
         double base = 1.0;
         for (int i = 0; i <= mMax; ++i) {
@@ -161,9 +158,6 @@ public:
     void insertSpin(bool spin, double tau) {
         addSpinWeight(spin, tau);
         c.push_back({spin, tau});
-        // double s = getSpin(spin);
-        // momentJSplay->insert(getSpin(spin) * tau);
-        // cout << "after normal insert" << endl;
         momentSplay[spin]->insert(tau);
 
         ++n;
@@ -197,19 +191,6 @@ public:
             momentJ[i] = moment[1][i] - moment[0][i];
             momentL[i] = moment[1][i] + moment[0][i];
         }
-        // cout << "momentJ: ";
-        // for (int i = 0; i < momentJ.size(); ++i) {
-        //     cout << momentJ[i] << ' ';
-        // }
-        // cout << endl;
-
-        // cout << "momentL: ";
-        // for (int i = 0; i < momentL.size(); ++i) {
-        //     cout << momentL[i] << ' ';
-        // }
-        // cout << endl;
-        // moment for J: moment[spin] - momont[spin ^ 1]
-        // cout << "after makeing moment" << endl;
 
         for (int i = 0; i <= mJ; ++i) {
             tFac = (i & 1) ? (-1) : 1;
@@ -222,8 +203,6 @@ public:
             }
         }
         res *= fac;
-
-        // cout << "res = " << res << endl;
 
         for (int i = 0; i <= mL; ++i) {
             tFac = (i & 1) ? (-1) : 1;
@@ -297,9 +276,6 @@ public:
         }
         cout << endl;
     }
-    // Config toConfig() {
-    //     return Config(c);
-    // }
 
     ~SplayWeightConfiguration() {
         if (momentSplay[0]) {
@@ -308,5 +284,156 @@ public:
         if (momentSplay[1]) {
             delete momentSplay[1];
         }
+    }
+};
+
+class SimpleConfiguration {
+public: 
+    vector<pair<bool, double> > c;
+
+    int mJ, mL, mF;
+    int mMax;
+    vector<double> aJ, aL, aF;
+    // we need to maintain:
+    // 1. f(n) (calculated once only)
+    // 2. \sum_{ij} L(x(|c[i].second - c[j].second|))
+    // 3. \sum_{ij} J(x(|c[i].second - c[j].second|))
+    vector<double> pf, spf;
+    int n;
+
+    vector<double> fVal;
+    vector<vector<double> > cFac;
+    int nCounter;
+
+    double weightJL, weightF;
+
+    double getSpin(bool s) {
+        return s ? 1.0 : (-1.0);
+    }
+
+    double JFunc(double dt) {
+        return polyFunc(dt, mJ, aJ);
+    }
+    double LFunc(double dt) {
+        return polyFunc(dt, mL, aL);
+    }
+    double fFunc(int n) {
+        return polyFunc(n, mF, aF);
+    }
+
+    void initConfiguration() {
+        n = 0; c.clear();
+        weightJL = 0.0; weightF = fFunc(0); // must run after randomInit
+    }
+
+    void initPF() {
+        mMax = max(mJ, mL); 
+    }
+
+    void initF() {
+        fVal.clear();
+        fVal.push_back(fFunc(0)); nCounter = 0;
+    }
+
+    SimpleConfiguration(vector<double> &_aJ, vector<double> &_aL, vector<double> &_aF) {
+        // init aJ, aL, aF; mJ, mL, mF;
+
+        aJ = _aJ; aL = _aL; aF = _aF;
+        mJ = int(aJ.size()) - 1;
+        mL = int(aL.size()) - 1;
+        mF = int(aF.size()) - 1;
+
+        initConfiguration();
+        initPF();
+        initF();
+    }
+
+    double polyFunc(double x, int order, vector<double> &a) {
+        double base = 1.0;
+        double res = 0.0;
+        for (int i = 0; i <= order; ++i) {
+            res += a[i] * base;
+            base *= x;
+        }
+        return res;
+    }
+
+    double deltaF(int n) {
+        // fVal[n + 1] - f[n]
+        while (nCounter < n + 1) {
+            ++nCounter; fVal.push_back(fFunc(nCounter));
+        }
+        return fVal[n + 1] - fVal[n];
+    }
+
+    void insertSpin(bool spin, double tau) {
+        c.push_back({spin, tau});
+        ++n;
+    }
+
+    void removeSpin(int idx) {
+        swap(c[idx], c.back());
+        c.pop_back();
+        --n;
+    }
+
+    double insertDeltaWeightJL(bool spin, double tau) {
+        double res = 0.0;
+        double dSpin = getSpin(spin);
+        for (int i = 0; i < n; ++i) {
+            res += 2 * dSpin * getSpin(c[i].first) * JFunc(fabs(tau - c[i].second));
+            res += 2 * LFunc(fabs(tau - c[i].second));
+        }
+        res += (aJ[0] + aL[0]);
+
+        return res;
+    }
+
+    double insertDeltaWeightF() {
+        return deltaF(n);
+    }
+    double removeDeltaWeightJL(bool spin, double tau) {
+        double res = 0.0;
+        double dSpin = getSpin(spin);
+        for (int i = 0; i < n; ++i) {
+            res += 2 * dSpin * getSpin(c[i].first) * JFunc(fabs(tau - c[i].second));
+            res += 2 * LFunc(fabs(tau - c[i].second));
+        }
+        res -= (aJ[0] + aL[0]);
+        
+        return -res;
+    }
+    double removeDeltaWeightF() {
+        return -deltaF(n - 1);
+    }
+
+    void updateWeight(double dWeightJL, double dWeightF) {
+        weightJL += dWeightJL; weightF += dWeightF;
+    }
+    double getWeight() {
+        return (n == 0) ? weightF : (weightJL / n + weightF);
+    }
+
+    void printPF() {
+        for (int i = 0; i <= mMax; ++i) {
+            cout << pf[i] << ' ';
+        }
+        cout << endl;
+        for (int i = 0; i <= mMax; ++i) {
+            cout << spf[i] << ' ';
+        }
+        cout << endl;
+    }
+    void printA() {
+        cout << "aJ: ";
+        for (int i = 0; i < aJ.size(); ++i) {
+            cout << aJ[i] << ' ';
+        }
+        cout << endl;
+        cout << "aL: ";
+        for (int i = 0; i < aL.size(); ++i) {
+            cout << aL[i] << ' ';
+        }
+        cout << endl;
     }
 };
