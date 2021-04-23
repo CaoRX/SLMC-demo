@@ -1,0 +1,11 @@
+.vscode/
+
+# exec file 
+*.out
+
+# data file 
+*.dat
+data/
+
+# build folder
+build/

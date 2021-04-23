@@ -1,0 +1,14 @@
+Program structure:
+1. split the functions to files(Green's function, configuration fast-update)
+
+The steps of this algorithm(and the contents need to be implemented)
+1. generate the configurations and weights(by matrix determinant)
+
+what we need(for each beta): configuration({tau, s}), weight
+
+to rewrite the move construction function for MatrixLapack
+
+assume we already have the input data({tau, s} -> weight)
+we should train a linear regression model with mJ, mL, mF
+
+todo: add assert to polynomial.hpp Polynomial::[]
