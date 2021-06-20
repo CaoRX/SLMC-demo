@@ -5,6 +5,7 @@
 #include <ctime>
 #include <sys/time.h>
 #include <chrono>
+#include <fstream>
 using namespace std;
 
 using std::chrono::duration_cast;
@@ -102,7 +103,11 @@ void testConfigurationCorrectness(int dataCount = 10000, int minimumN = 30) {
 void testEfficiency(int dataCount = 100000, int minimumN = 500) {
     // run a test of dataCount steps, n cannot be decreased if lower than minimumN
     // test the efficiency(and also correctness) by comparing with O(n) update
-    printf("efficiency test: (mJ, mL, mF) = (%d, %d, %d), step = %d, minimumN = %d\n", mJ, mL, mF, dataCount, minimumN);
+    string fileName = "data/n" + std::to_string(minimumN) + ".txt";
+    cout << "fileName = " << fileName << endl;
+    fstream fout(fileName, std::ios::out);
+    fout << "efficiency test: (mJ, mL, mF) = (" << mJ << ", " << mL << ", " << mF << "), step = " << dataCount << ", minimumN = " << minimumN << std::endl;
+    // printf("efficiency test: (mJ, mL, mF) = (%d, %d, %d), step = %d, minimumN = %d\n", mJ, mL, mF, dataCount, minimumN);
     vector<double> aJ = randomVector(mJ + 1);
     vector<double> aL = randomVector(mL + 1);
     vector<double> aF = randomVector(mF + 1);
@@ -131,7 +136,7 @@ void testEfficiency(int dataCount = 100000, int minimumN = 500) {
         }
         if (opt) {
             opts.push_back(opt);
-            vertices.push_back({randomInt(2), randomDouble() * beta});
+            vertices.push_back({randomInt(2), (randomDouble() - 0.5) * beta});
             removeIdx.push_back(-1);
             ++currN;
         } else {
@@ -167,7 +172,7 @@ void testEfficiency(int dataCount = 100000, int minimumN = 500) {
     auto millisecAfterSimulation = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
     averageN /= dataCount;
     effTime = (millisecAfterSimulation - millisecBeforeSimulation);
-    cout << "total time for efficient update on " << dataCount << " steps with average n = " << averageN << " is " << effTime << "ms." << endl;
+    fout << "total time for efficient update on " << dataCount << " steps with average n = " << averageN << " is " << effTime << "ms." << endl;
 
     millisecBeforeSimulation = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
     for (int i = 0; i < dataCount; ++i) {
@@ -200,13 +205,20 @@ void testEfficiency(int dataCount = 100000, int minimumN = 500) {
         totalError += (weightEff[i] - weightSimple[i]) / weightSimple[i];
     }
     totalError /= dataCount;
-    cout << "total time for simple update on " << dataCount << " steps with average n = " << averageN << " is " << simpleTime << "ms." << endl;
-    cout << "average weight error between efficient update and simple update is " << totalError << endl;
+    fout << "total time for simple update on " << dataCount << " steps with average n = " << averageN << " is " << simpleTime << "ms." << endl;
+    fout << "average weight error between efficient update and simple update is " << totalError << endl;
+    fout.close();
 }
 
-int main() {
+int main(int argc, char **argv) {
     initRandom();
-    testConfigurationCorrectness(1000, 30);
-    testEfficiency(10000, 3000);
+    vector<int> minNs = {10, 30, 50, 100, 300, 500, 1000, 3000};
+    // if (argc > 1) {
+    //     minN = atoi(argv[1]);
+    // }
+    // testConfigurationCorrectness(1000, 30);
+    for (int minN: minNs) {
+        testEfficiency(100000, minN);
+    }
     return 0;
 }
