@@ -111,7 +111,7 @@ public:
         if (n == 0) {
             return fFunc(n);
         }
-        // -beta H^{eff}
+        // -simBeta H^{eff}
         double res = 0.0;
         for (int i = 0; i < n; ++i) {
             for (int j = 0; j < n; ++j) {

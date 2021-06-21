@@ -30,7 +30,7 @@ int randomInt(int n) {
     return rand() % n;
 }
 
-const double beta = 10.0;
+const double simBeta = 10.0;
 const double V = 1.0;
 const double K = 1.0;
 
@@ -68,7 +68,7 @@ void testConfigurationCorrectness(int dataCount = 10000, int minimumN = 30) {
         bool isInsert = randomInt(2);
         if (isInsert) {
             bool spin = randomInt(2);
-            double tau = randomDouble() * beta;
+            double tau = randomDouble() * simBeta;
             dWeightJL = c.insertDeltaWeightJL(spin, tau);
             dWeightF = c.insertDeltaWeightF();
             c.insertSpin(spin, tau);
@@ -100,125 +100,153 @@ void testConfigurationCorrectness(int dataCount = 10000, int minimumN = 30) {
     // c.printA();
 }
 
-void testEfficiency(int dataCount = 100000, int minimumN = 500) {
+void testEfficiency(int dataCount = 100000, int minimumN = 500, int maximumN = 1000, int label = -1, int loop = 1) {
     // run a test of dataCount steps, n cannot be decreased if lower than minimumN
     // test the efficiency(and also correctness) by comparing with O(n) update
-    string fileName = "data/n" + std::to_string(minimumN) + ".txt";
+    if (maximumN < minimumN) {
+        maximumN = minimumN * 2;
+    }
+    if (label == -1) {
+        label = minimumN;
+    }
+    string fileName = "data/n" + std::to_string(label) + ".txt";
     cout << "fileName = " << fileName << endl;
     fstream fout(fileName, std::ios::out);
     fout << "efficiency test: (mJ, mL, mF) = (" << mJ << ", " << mL << ", " << mF << "), step = " << dataCount << ", minimumN = " << minimumN << std::endl;
     // printf("efficiency test: (mJ, mL, mF) = (%d, %d, %d), step = %d, minimumN = %d\n", mJ, mL, mF, dataCount, minimumN);
-    vector<double> aJ = randomVector(mJ + 1);
-    vector<double> aL = randomVector(mL + 1);
-    vector<double> aF = randomVector(mF + 1);
 
-    SplayWeightConfiguration c(aJ, aL, aF);
-    SimpleConfiguration cS(aJ, aL, aF);
-    double dWeightJL, dWeightF;
-    double dWeightJLS, dWeightFS;
-    double totalError = 0.0;
-    // int dataCount = 10000;
-    double averageN = 0;
+    double effTime = 0, simpleTime = 0;
+    double totalAverageN = 0;
+    double totalErrorSum = 0.0;
 
-    vector<pair<bool, double> > vertices;
-    vector<int> removeIdx;
-    vector<bool> opts; // false for remove, true for insert
+    for (int lp = 0; lp < loop; ++lp) {
+        vector<double> aJ = randomVector(mJ + 1);
+        vector<double> aL = randomVector(mL + 1);
+        vector<double> aF = randomVector(mF + 1);
 
-    vector<double> weightEff, weightSimple;
-    double effTime, simpleTime;
-    int currN = 0;
-    for (int i = 0; i < dataCount; ++i) {
-        bool opt;
-        if (currN <= minimumN) {
-            opt = true;
-        } else {
-            opt = randomInt(2);
+        SplayWeightConfiguration c(aJ, aL, aF);
+        SimpleConfiguration cS(aJ, aL, aF);
+        double dWeightJL, dWeightF;
+        double dWeightJLS, dWeightFS;
+        double totalError = 0.0;
+        // int dataCount = 10000;
+        double averageN = 0;
+
+        vector<pair<bool, double> > vertices;
+        vector<int> removeIdx;
+        vector<bool> opts; // false for remove, true for insert
+
+        vector<double> weightEff, weightSimple;
+        int currN = 0;
+        for (int i = 0; i < dataCount; ++i) {
+            bool opt;
+            if (currN <= minimumN) {
+                opt = true;
+            } else if (currN >= maximumN) {
+                opt = false;
+            } else {
+                opt = randomInt(2);
+            }
+            if (opt) {
+                opts.push_back(opt);
+                vertices.push_back({randomInt(2), (randomDouble() - 0.5) * simBeta});
+                removeIdx.push_back(-1);
+                ++currN;
+            } else {
+                opts.push_back(opt);
+                vertices.push_back({0, 0});
+                removeIdx.push_back(randomInt(currN));
+                --currN;
+            }
         }
-        if (opt) {
-            opts.push_back(opt);
-            vertices.push_back({randomInt(2), (randomDouble() - 0.5) * beta});
-            removeIdx.push_back(-1);
-            ++currN;
-        } else {
-            opts.push_back(opt);
-            vertices.push_back({0, 0});
-            removeIdx.push_back(randomInt(currN));
-            --currN;
+
+        auto millisecBeforeSimulation = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+        for (int i = 0; i < dataCount; ++i) {
+            bool isInsert = opts[i];
+            if (isInsert) {
+                bool spin = vertices[i].first;
+                double tau = vertices[i].second;
+
+                dWeightJL = c.insertDeltaWeightJL(spin, tau);
+                dWeightF = c.insertDeltaWeightF();
+                c.insertSpin(spin, tau);
+                c.updateWeight(dWeightJL, dWeightF);
+            } else {
+                int idx = removeIdx[i];
+                dWeightJL = c.removeDeltaWeightJL(c.c[idx].first, c.c[idx].second);
+                dWeightF = c.removeDeltaWeightF();
+                c.updateWeight(dWeightJL, dWeightF);
+                c.removeSpin(idx);
+            }
+            double weight = c.getWeight();
+            weightEff.push_back(weight);
+            averageN += c.n;
         }
+        auto millisecAfterSimulation = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+        averageN /= dataCount;
+        effTime += (millisecAfterSimulation - millisecBeforeSimulation);
+
+        averageN = 0;
+
+        millisecBeforeSimulation = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+        for (int i = 0; i < dataCount; ++i) {
+            bool isInsert = opts[i];
+            if (isInsert) {
+                bool spin = vertices[i].first;
+                double tau = vertices[i].second;
+
+                dWeightJLS = cS.insertDeltaWeightJL(spin, tau);
+                dWeightFS = cS.insertDeltaWeightF();
+                cS.insertSpin(spin, tau);
+                cS.updateWeight(dWeightJLS, dWeightFS);
+            } else {
+                int idx = removeIdx[i];
+                dWeightJLS = cS.removeDeltaWeightJL(cS.c[idx].first, cS.c[idx].second);
+                dWeightFS = cS.removeDeltaWeightF();
+                cS.updateWeight(dWeightJLS, dWeightFS);
+                cS.removeSpin(idx);
+            }
+            double weight = cS.getWeight();
+            weightSimple.push_back(weight);
+            averageN += cS.n;
+        }
+        averageN /= dataCount;
+        totalAverageN += averageN;
+        millisecAfterSimulation = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+
+        simpleTime += millisecAfterSimulation - millisecBeforeSimulation;
+
+        totalError = 0.0;
+        for (int i = 0; i < dataCount; ++i) {
+            totalError += (weightEff[i] - weightSimple[i]) / weightSimple[i];
+        }
+        totalError /= dataCount;
+        totalErrorSum += totalError;
     }
 
-    auto millisecBeforeSimulation = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-    for (int i = 0; i < dataCount; ++i) {
-        bool isInsert = opts[i];
-        if (isInsert) {
-            bool spin = vertices[i].first;
-            double tau = vertices[i].second;
-
-            dWeightJL = c.insertDeltaWeightJL(spin, tau);
-            dWeightF = c.insertDeltaWeightF();
-            c.insertSpin(spin, tau);
-            c.updateWeight(dWeightJL, dWeightF);
-        } else {
-            int idx = removeIdx[i];
-            dWeightJL = c.removeDeltaWeightJL(c.c[idx].first, c.c[idx].second);
-            dWeightF = c.removeDeltaWeightF();
-            c.updateWeight(dWeightJL, dWeightF);
-            c.removeSpin(idx);
-        }
-        double weight = c.getWeight();
-        weightEff.push_back(weight);
-        averageN += c.n;
-    }
-    auto millisecAfterSimulation = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-    averageN /= dataCount;
-    effTime = (millisecAfterSimulation - millisecBeforeSimulation);
-    fout << "total time for efficient update on " << dataCount << " steps with average n = " << averageN << " is " << effTime << "ms." << endl;
-
-    millisecBeforeSimulation = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-    for (int i = 0; i < dataCount; ++i) {
-        bool isInsert = opts[i];
-        if (isInsert) {
-            bool spin = vertices[i].first;
-            double tau = vertices[i].second;
-
-            dWeightJLS = cS.insertDeltaWeightJL(spin, tau);
-            dWeightFS = cS.insertDeltaWeightF();
-            cS.insertSpin(spin, tau);
-            cS.updateWeight(dWeightJLS, dWeightFS);
-        } else {
-            int idx = removeIdx[i];
-            dWeightJLS = cS.removeDeltaWeightJL(cS.c[idx].first, cS.c[idx].second);
-            dWeightFS = cS.removeDeltaWeightF();
-            cS.updateWeight(dWeightJLS, dWeightFS);
-            cS.removeSpin(idx);
-        }
-        double weight = cS.getWeight();
-        weightSimple.push_back(weight);
-        // averageN += c.n;
-    }
-    millisecAfterSimulation = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
-
-    simpleTime = millisecAfterSimulation - millisecBeforeSimulation;
-
-    totalError = 0.0;
-    for (int i = 0; i < dataCount; ++i) {
-        totalError += (weightEff[i] - weightSimple[i]) / weightSimple[i];
-    }
-    totalError /= dataCount;
-    fout << "total time for simple update on " << dataCount << " steps with average n = " << averageN << " is " << simpleTime << "ms." << endl;
-    fout << "average weight error between efficient update and simple update is " << totalError << endl;
+    totalAverageN /= loop;
+    simpleTime /= loop;
+    effTime /= loop;
+    totalErrorSum /= loop;
+    
+    fout << "total time for efficient update on " << dataCount << " steps with average n = " << totalAverageN << " is " << effTime << "ms." << endl;
+    fout << "total time for simple update on " << dataCount << " steps with average n = " << totalAverageN << " is " << simpleTime << "ms." << endl;
+    fout << "average weight error between efficient update and simple update is " << totalErrorSum << endl;
     fout.close();
 }
 
 int main(int argc, char **argv) {
     initRandom();
     vector<int> minNs = {10, 30, 50, 100, 300, 500, 1000, 3000};
-    // if (argc > 1) {
-    //     minN = atoi(argv[1]);
-    // }
+    int loop = 1;
+    if (argc > 1) {
+        loop = atoi(argv[1]);
+    }
     // testConfigurationCorrectness(1000, 30);
     for (int minN: minNs) {
-        testEfficiency(100000, minN);
+        int low = int(minN - sqrt(minN));
+        int high = int(minN + sqrt(minN));
+        testEfficiency(100000, low, high, minN, loop);
     }
     return 0;
 }
