@@ -21,5 +21,5 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 # message(STATUS $ENV{SOURCE_FILES})
 # add_library(SLMCLib STATIC ${SOURCE_FILES})
 
-add_executable(splayTest.out test/splayTest.cpp)
+add_executable(SLMC-demo.out test/splayTest.cpp)
 # target_link_libraries(splayTest.out SLMCLib ${lapackblas_libraries})
