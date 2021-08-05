@@ -29,16 +29,18 @@ double randomDouble() {
 int randomInt(int n) {
     return rand() % n;
 }
+const double range = 2.0;
+double generateDataPoint() {
+    return (randomDouble() - 0.5) * range;
+}
+// const double V = 1.0;
+// const double K = 1.0;
 
-const double simBeta = 10.0;
-const double V = 1.0;
-const double K = 1.0;
+// double U = 1.0;
+// double mu = 0.5 * U;
 
-double U = 1.0;
-double mu = 0.5 * U;
-
-double D = 1.0;
-double myGamma = -1.0;
+// double D = 1.0;
+// double myGamma = -1.0;
 
 int mJ = 12, mL = 12, mF = 3;
 
@@ -68,7 +70,7 @@ void testConfigurationCorrectness(int dataCount = 10000, int minimumN = 30) {
         bool isInsert = randomInt(2);
         if (isInsert) {
             bool spin = randomInt(2);
-            double tau = randomDouble() * simBeta;
+            double tau = generateDataPoint();
             dWeightJL = c.insertDeltaWeightJL(spin, tau);
             dWeightF = c.insertDeltaWeightF();
             c.insertSpin(spin, tau);
@@ -82,7 +84,7 @@ void testConfigurationCorrectness(int dataCount = 10000, int minimumN = 30) {
         }
         if (!efficiencyTest) {
             double weight = c.getWeight(), mbhWeight = c.bruteForceMBH();
-            totalError += (weight - mbhWeight) / mbhWeight;
+            totalError += fabs((weight - mbhWeight) / mbhWeight);
         }
 
         averageN += c.n;
@@ -118,6 +120,7 @@ void testEfficiency(int dataCount = 100000, int minimumN = 500, int maximumN = 1
     double effTime = 0, simpleTime = 0;
     double totalAverageN = 0;
     double totalErrorSum = 0.0;
+    double maximumError = 0.0, minimumV = -1.0;
 
     for (int lp = 0; lp < loop; ++lp) {
         vector<double> aJ = randomVector(mJ + 1);
@@ -149,7 +152,7 @@ void testEfficiency(int dataCount = 100000, int minimumN = 500, int maximumN = 1
             }
             if (opt) {
                 opts.push_back(opt);
-                vertices.push_back({randomInt(2), (randomDouble() - 0.5) * simBeta});
+                vertices.push_back({randomInt(2), generateDataPoint()});
                 removeIdx.push_back(-1);
                 ++currN;
             } else {
@@ -217,8 +220,17 @@ void testEfficiency(int dataCount = 100000, int minimumN = 500, int maximumN = 1
         simpleTime += millisecAfterSimulation - millisecBeforeSimulation;
 
         totalError = 0.0;
+
         for (int i = 0; i < dataCount; ++i) {
-            totalError += (weightEff[i] - weightSimple[i]) / weightSimple[i];
+            double error = fabs(weightEff[i] - weightSimple[i]) / fabs(weightSimple[i]);
+            totalError += error;
+            maximumError = max(maximumError, error);
+            minimumV = (minimumV < 0) ? fabs(weightSimple[i]) : min(fabs(weightSimple[i]), minimumV);
+            // if (minimumN == 6) {
+            //     fout << error << endl;
+            // }
+            // totalError += fabs(weightEff[i] - weightSimple[i]) / fabs(weightSimple[i]);
+            // if 
         }
         totalError /= dataCount;
         totalErrorSum += totalError;
@@ -232,21 +244,25 @@ void testEfficiency(int dataCount = 100000, int minimumN = 500, int maximumN = 1
     fout << "total time for efficient update on " << dataCount << " steps with average n = " << totalAverageN << " is " << effTime << "ms." << endl;
     fout << "total time for simple update on " << dataCount << " steps with average n = " << totalAverageN << " is " << simpleTime << "ms." << endl;
     fout << "average weight error between efficient update and simple update is " << totalErrorSum << endl;
+
+    // fout << "minimum absolute weight = " << minimumV << ", maximum error = " << maximumError << endl;
+
     fout.close();
 }
 
 int main(int argc, char **argv) {
     initRandom();
-    vector<int> minNs = {10, 30, 50, 100, 300, 500, 1000, 3000};
+    vector<int> averageNs = {10, 15, 30, 50, 100, 300, 500, 1000, 3000};
+    // vector<int> averageNs = {10, 15, 30};
     int loop = 1;
     if (argc > 1) {
         loop = atoi(argv[1]);
     }
     // testConfigurationCorrectness(1000, 30);
-    for (int minN: minNs) {
-        int low = int(minN - sqrt(minN));
-        int high = int(minN + sqrt(minN));
-        testEfficiency(100000, low, high, minN, loop);
+    for (int averageN: averageNs) {
+        int low = int(averageN - sqrt(averageN));
+        int high = int(averageN + sqrt(averageN));
+        testEfficiency(100000, low, high, averageN, loop);
     }
     return 0;
 }
