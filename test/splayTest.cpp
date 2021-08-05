@@ -109,7 +109,7 @@ void testEfficiency(int dataCount = 100000, int minimumN = 500, int maximumN = 1
     if (label == -1) {
         label = minimumN;
     }
-    string fileName = "data/n" + std::to_string(label) + ".txt";
+    string fileName = "n" + std::to_string(label) + ".txt";
     cout << "fileName = " << fileName << endl;
     fstream fout(fileName, std::ios::out);
     fout << "efficiency test: (mJ, mL, mF) = (" << mJ << ", " << mL << ", " << mF << "), step = " << dataCount << ", minimumN = " << minimumN << std::endl;
